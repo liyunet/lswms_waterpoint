@@ -7,12 +7,22 @@ __pycache__/
 # C extensions
 *.so
 # lswms_waterpoint files
+temp/RFE/*
+src/conf/*
+input/clet/*
+output/final_depth/*
+input/data/*
+input/geobil/2026/*
+logs/*
 
-src/conf/**
-input/clet_/
-output/final_depth/**
-input/data/**
-logs/**
+#files so the folders stay tracked
+!temp/RFE/.gitkeep
+!src/conf/.gitkeep
+!input/clet/.gitkeep
+!output/final_depth/.gitkeep
+!input/data/.gitkeep
+!input/geobil/2026/.gitkeep
+!logs/.gitkeep
 # Distribution / packaging
 .Python
 build/
