@@ -85,76 +85,98 @@ class workspace_dates_arg:
             self.logger.error("Required data from final_Depth_pkl not found: %s", e)
             raise FileNotFoundError(f"Required data file not found: {e}") from e 
     def download_rfe(self):
-        
-        # path_ = pathlib.Path.cwd().joinpath("geobil")
-        # url_o ='https://edcintl.cr.usgs.gov/downloads/sciweb1/shared/fews/web/africa/daily/rfe/downloads/daily/'
-        
-        geobil_path = self.base_path.parent.joinpath(self.config_attrs.config['Paths']['RFE_path'])
-        url_rfe = self.config_attrs.config['SystemConfig']['url_rfe'] 
-        year_= datetime.today().year
-        #year_=datetime.datetime(2025,3,1).year
-        print(geobil_path)
-        download_path =geobil_path.joinpath(str(year_))
-        os.chdir(download_path)
-        lfiles = glob.glob("*.*",recursive=True)
-        lag=2
+            web = 'https://edcintl.cr.usgs.gov/downloads/sciweb1/shared/fews/web/africa/daily/rfe/downloads/daily/'
+            
+            geobil_path = self.base_path.parent.joinpath(self.config_attrs.config['Paths']['RFE_path'])
+            url_rfe = self.config_attrs.config['SystemConfig']['url_rfe'] 
+            year_ = datetime.today().year
+            print(geobil_path)
+            download_path = geobil_path.joinpath(str(year_))
+            
+            if not download_path.exists():
+                download_path.mkdir(parents=True)
+                
+            os.chdir(download_path)
+            print('current working directory', os.getcwd())
+            
+            lfiles = glob.glob("*.*", recursive=True)
+            lag = 2
 
-        if not(download_path.exists()):
-            download_path.mkdir(parents=True)
-        #download_date=datetime.datetime.today()- datetime.timedelta(days=lag)
-        download_date= datetime.today()- timedelta(days=lag)
-        download_jdate='%d%03d' % (download_date.today().timetuple().tm_year,download_date.timetuple().tm_yday)
-        #lfiles = [int(str(x)[70:-7]) for x path = Path(output_path).glob('**/*')in path if x.is_file()]
-        if len(lfiles) != 0:
-            last_jdate= max([int(i[5:-7]) for i in lfiles ])
-            if last_jdate==int(download_jdate):
-                print(last_jdate)
-                print("the file is already downaloded")
+            download_date = datetime.today() - timedelta(days=lag)
+            download_jdate = '%d%03d' % (download_date.today().timetuple().tm_year, download_date.timetuple().tm_yday)
+            print('download_jdate', download_jdate)
+            
+            lfiles.sort(reverse=False)
+            print('lfiles', lfiles[-5:])
+            
+            if len(lfiles) != 0:
+                valid_jdates = []
+                for i in lfiles:
+                    if i.startswith("rain_") and i.endswith(".tar.gz"):
+                        sub = i[5:-7]
+                        if sub.isdigit():
+                            valid_jdates.append(int(sub))
+                
+                if valid_jdates:
+                    last_jdate = max(valid_jdates)
+                else:
+                    last_jdate = int(f"{year_}001")
+
+                if last_jdate == int(download_jdate):
+                    print(last_jdate)
+                    print("the file is already downloaded")
+                else:
+                    date_start = datetime.strptime(str(last_jdate)[2:], "%y%j")
+                    date_start = date_start + timedelta(days=1)
+                    download_date = download_date.date()
+                    date_range = pd.date_range(start=date_start, end=download_date)
+                    
+                    for i in range(len(date_range)):
+                        julian_date = '%d%03d' % (date_range[i].timetuple().tm_year, date_range[i].timetuple().tm_yday)
+                        file_name = "rain_{}.tar.gz".format(julian_date)
+                        
+                        if os.path.exists(file_name) and os.stat(file_name).st_size > 10000:
+                            print(f"File {file_name} already exists and looks valid. Skipping download.")
+                            continue
+                            
+                        url = "{}rain_{}.tar.gz".format(url_rfe, julian_date)
+                        print(url)
+                        try:
+                            if os.path.exists(file_name):
+                                os.remove(file_name)
+                            wget.download(url, out=file_name)
+                            print(f"\nSuccessfully downloaded {file_name}")
+                        except Exception as e:
+                            print(f'\nAttempting fallback URL for {julian_date} due to: {e}')
+                            try:
+                                url_fallback = "{}rain_{}.tar.gz".format(web, julian_date)
+                                if os.path.exists(file_name):
+                                    os.remove(file_name)
+                                wget.download(url_fallback, out=file_name)
+                                print(f"\nSuccessfully downloaded {file_name} from fallback.")
+                            except Exception as e2:
+                                print(f'RFE data for {date_range[i].date()} failed to download: {e2}')
             else:
-                date_start= datetime.strptime(str(last_jdate)[2:], "%y%j")
-                date_start=date_start+timedelta(days=1)
-                download_date=download_date.date()
-                date_range=pd.date_range(start=date_start, end=download_date)
-                #date_range=pd.date_range(start='2025-03-01', end='2025-05-25')
-                for i in range(len(date_range)):
-                    #julian_date='%d%03d' % (date_range[i].timetuple().tm_year,date_range[i].timetuple().tm_yday)
-                    julian_date='%d%d' % (date_range[i].timetuple().tm_year,date_range[i].timetuple().tm_yday)
-                    url="{}rain_{}.tar.gz".format(url_rfe,julian_date)
-                    print(url)
-                    try:
-                        wget.download(url)
-                        d_size = requests.get(url,stream=True)
-                        d_size =  int(d_size.headers.get("Content-length"))
-                        f_size = os.stat("rain_{}.tar.gz".format(julian_date)).st_size
-                        while (f_size != d_size):
-                            print ('the downlaoded file is corrupted, downaloding in progress')
-                            os.remove("rain_{}.tar.gz".format(julian_date))
-                            print("downloading  again julian date {}".format(julian_date))
-                            url="{}rain_{}.tar.gz".format(web,julian_date)
-                            f_size = os.stat("rain_{}.tar.gz".format(julian_date)).st_size
-                    except  Exception as e:
-                        print(f'RFE data for {download_date} may not be avaialble, please try again later: {e}')
-        else:
-            date_new=datetime.date(year_,1,1)
-            julian_date='%d%d' % (date_new.timetuple().tm_year,date_new.timetuple().tm_yday)
-            print("downloading zip file for julian date {}".format(julian_date))
-            url="{}rain_{}.tar.gz".format(web,julian_date)
-            wget.download(url)
-            d_size = requests.get(url,stream=True)
-            d_size =  int(d_size.headers.get("Content-length"))
-            f_size = os.stat("rain_{}.tar.gz".format(julian_date)).st_size
-            while (f_size != d_size):
-                print ('the downlaoded file is corrupted, downaloding in progress')
-                os.remove("rain_{}.tar.gz".format(julian_date))
-                print("downloading  again julian date {}".format(julian_date))
-                url="{}rain_{}.tar.gz".format(web,julian_date)
-                f_size = os.stat("rain_{}.tar.gz".format(julian_date)).st_size
-        
-        lfiles = glob.glob("*.*",recursive=True)
-        last_jdate= max([int(i[5:-7]) for i in lfiles ])
-        last_jdate = str(last_jdate)
-        print(last_jdate)
-        data_avail_date = datetime(int(last_jdate[:4]), 1, 1) + timedelta(days=int(last_jdate[4:]) - 1)
-        return data_avail_date
+                date_new = datetime(year_, 1, 1)
+                julian_date = '%d%03d' % (date_new.timetuple().tm_year, date_new.timetuple().tm_yday)
+                print("downloading zip file for julian date {}".format(julian_date))
+                file_name = "rain_{}.tar.gz".format(julian_date)
+                url = "{}rain_{}.tar.gz".format(web, julian_date)
+                try:
+                    wget.download(url, out=file_name)
+                except Exception as e:
+                    print(f'Initial RFE download failed: {e}')
+            
+            # Robust parsing for final return date
+            lfiles = glob.glob("*.*", recursive=True)
+            valid_jdates = [int(i[5:-7]) for i in lfiles if i.startswith("rain_") and i.endswith(".tar.gz") and i[5:-7].isdigit()]
+            if not valid_jdates:
+                raise ValueError("No valid RFE files found after download attempt.")
+                
+            last_jdate = max(valid_jdates)
+            last_jdate_str = str(last_jdate)
+            print(last_jdate_str)
+            data_avail_date = datetime(int(last_jdate_str[:4]), 1, 1) + timedelta(days=int(last_jdate_str[4:]) - 1)
+            return data_avail_date
                                                                                                                                                                                       
 #path_='/home/liam/FEWS/DataPortal_dev/data/Africa/Daily/RFE/geobil/'

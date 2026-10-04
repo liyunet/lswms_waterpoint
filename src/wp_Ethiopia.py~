@@ -104,6 +104,7 @@ headers['Content-type']= content
 headers['Authorization']= auth
 
 
+
 #the class is initiated with configuration attributes and the base path 
 workspace = workspace_dates_arg(base_path=base_path,config_attrs=config_attrs,logger=logger) 
 #mange workspace 
@@ -111,12 +112,14 @@ wrk_dirs =workspace.manage_workspace()
 #retieve dataframes  
 dataframes = workspace.get_dataframes()
 recent_download = workspace.download_rfe()
-print('recent_download', recent_download)
+print(recent_download)
 date_lists,final_Depth = workspace.get_run_dates()
 date_lists = pd.date_range(date_lists[0],recent_download)
 # date_lists = pd.date_range(date_lists[0],recent_download)
 # date_lists = date_lists[36: ]
-print('date lists ',date_lists)
+date_lists
+
+
 
 # --- Load model paramertes from loc_sample ---
 loc_sample_df = dataframes['loc_pickle_path']  #retrieve the loc dataframe 
@@ -135,6 +138,7 @@ main_geometry_gdf = dataframes['shapes_path_WGS'][['uid', 'geometry']]
 main_geometry_gdf['uid'] = main_geometry_gdf['uid'].astype(int) 
 
 clet_path = base_path.parent.joinpath(config_attrs.config['Paths']['clet_path'])
+
 def process_ET(target_date, clet_path,logger) :
     #clet_path clet_180101 to clet_181231
     """
@@ -337,7 +341,7 @@ for current_date in date_lists:
         # Open raster and reproject ONCE per date
         with rxr.open_rasterio(rain_bil_path) as rain_raw:
             rain_raw = rain_raw.squeeze(drop=True) # Remove single dimensions
-            print("Reprojecting to User_Defined_Lambert_Azimuthal_Equal_Area ") #: {target_crs.to_string()}")
+            print(f"Reprojecting to UserDefined CRS: {target_crs.to_string()}")
 
             if rain_raw.rio.crs is None:
                  warnings.warn(f"Source CRS for {rain_bil_path} is missing.")
@@ -439,8 +443,8 @@ class Wp_run: #we need object or none for the class /implmentation
         # Set index for faster lookup if processing multiple UIDs
         self.logger = logger
         self.headers = headers
-        # url = 'https://rangelandmonitoring.eiar.gov.et/api/v1/monitored/dialy_update'
-        url ='https://webapi.waterpointsmonitoring.net/api/v1/monitored/dialy_update'
+        url = 'https://rangelandmonitoring.eiar.gov.et/api/v1/monitored/dialy_update'
+        #url ='https://webapi.waterpointsmonitoring.net/api/v1/monitored/dialy_update'
         self.url = url
         self.loc_params = loc_params_df.set_index('uid') #access theparameters by filtering with uid(waterpoin_ID)
         self.clet_et_map = clet_et_map
@@ -575,7 +579,7 @@ class Wp_run: #we need object or none for the class /implmentation
                         # prev_depth = np.array(rfe_df_wp_uid[rfe_df_wp_uid['date']==prev_date]['depth(m)'])
                     # print(target_date, 'wp id ----',wp_uid)
                     RF = self.rfe_waterpoint_df[(self.rfe_waterpoint_df['date']== target_date) & (self.rfe_waterpoint_df['uid']==wp_uid)]['RFE'].values
-                    self.logger.info(f"the month is in the dry season and apply water use: {target_date.month}")
+                    self.logger.info('the month is in the dry season and apply water use ', target_date.month)
                     water_level = RF + prev_depth + depth_v - zevap - water_use - self.seapage
                     water_level = self.check_depth(water_level, water_depth_max)
                     rfe_df_wp_uid.loc[rfe_df_wp_uid.date == target_date,'depth(m)'] = water_level
@@ -669,41 +673,21 @@ class Wp_run: #we need object or none for the class /implmentation
         ConnectionError
             If the web server is unreachable or the initial connection check fails.
         """
-        df_import=self.format_output()
+        df_import = self.format_output()
         print(df_import.tail())
-        print(self.url)        
-        # Define chunk size to prevent 504 Gateway Time-out
-        chunk_size = 50 
-        total_rows = len(df_import)
-        success = True
-        
-        for i in range(0, total_rows, chunk_size):
-            chunk_df = df_import.iloc[i:i + chunk_size]
-            json_data = chunk_df.to_json(orient='records')
-            try:
-                response = requests.post(self.url, data=json_data, headers=self.headers, verify=False, timeout=45)
-                print(f"Batch {i//chunk_size + 1}: Status Code {response.status_code}")
-                
-                if response.status_code == 200:
-                    msg = f"Batch uploaded successfully, status code: {response.status_code}"
-                    self.logger.info(msg)
-                else:
-                    msg = f"ERROR! Upload failed for batch starting at index {i}, status code: {response.status_code} - Server Response: {response.text}"
-                    self.logger.error(msg)
-                    success = False
-            except requests.exceptions.Timeout:
-                msg = f"ERROR! Upload timed out for batch starting at index {i}."
-                self.logger.error(msg)
-                success = False
-            except Exception as e:
-                msg = f"ERROR! An exception occurred during upload: {e}"
-                self.logger.error(msg)
-                success = False
-                
-        if success:
-            msg = "All data uploaded successfully."
+        json_data = df_import.to_json(orient='records')
+        print(self.url)
+
+        url ='https://webapi.waterpointsmonitoring.net/api/v1/monitored/dialy_update'
+        #url = 'https://rangelandmonitoring.eiar.gov.et/api/v1/monitored/dialy_update'
+        response = requests.post(url, data=json_data, headers=headers,verify=False)
+        print(response.status_code)
+        if response.status_code==200:
+            msg = f"upload processed successfully{response.status_code}"
+            logger.info(f"data uploaded successfully, status code: {response.status_code}")
         else:
-            msg = "Upload completed with errors. Check logs for details."
+            msg = f"ERROR! upload was not successfull, status code: {response.text}"
+            logger.error(msg)
         return msg
 
 
