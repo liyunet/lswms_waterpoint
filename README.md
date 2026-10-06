@@ -12,6 +12,7 @@ For complete setup guides, usage instructions, and detailed API references, plea
 
 * Python 3.x
 * Open-source Python Geospatial Stack (e.g., GeoPandas, GDAL, Rasterio, Shapely)
+* conda env create -f environment.yml
 ---
 ## 🤝 Contributing
 
